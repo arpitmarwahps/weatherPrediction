@@ -1,5 +1,6 @@
 package com.weather.weather_prediction.model;
 
+import com.weather.weather_prediction.dto.WeatherInfoDto;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ public class WeatherResponse {
     private LocalDate date;
     private double highTemp;
     private double lowTemp;
+    private double humidity;
     private String advice;
-    private List<WeatherForecast> weatherForecastList;
+    private List<WeatherInfoDto> weatherInfoDtoList;
 }

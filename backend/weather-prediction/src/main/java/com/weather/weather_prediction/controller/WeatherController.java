@@ -1,5 +1,6 @@
 package com.weather.weather_prediction.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.weather.weather_prediction.model.WeatherResponse;
 import com.weather.weather_prediction.service.WeatherService;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ public class WeatherController {
     private WeatherService weatherService;
 
     @GetMapping
-    public ResponseEntity<List<WeatherResponse>> getWeather(@RequestParam String city) {
+    public ResponseEntity<List<WeatherResponse>> getWeather(@RequestParam String city) throws JsonProcessingException {
         List<WeatherResponse> response = weatherService.getWeatherForecast(city);
         return ResponseEntity.ok(response);
     }
