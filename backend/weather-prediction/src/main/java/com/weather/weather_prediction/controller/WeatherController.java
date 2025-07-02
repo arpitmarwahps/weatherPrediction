@@ -1,6 +1,7 @@
 package com.weather.weather_prediction.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.weather.weather_prediction.client.OpenWeatherClient;
 import com.weather.weather_prediction.model.WeatherResponse;
 import com.weather.weather_prediction.service.WeatherService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,6 @@ import java.util.List;
 @RequestMapping("/api/weather")
 @RequiredArgsConstructor
 public class WeatherController {
-
     @Autowired
     private WeatherService weatherService;
 

@@ -2,33 +2,78 @@ package com.weather.weather_prediction.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weather.weather_prediction.client.OpenWeatherClient;
+import com.weather.weather_prediction.dto.CachedWeather;
 import com.weather.weather_prediction.dto.WeatherApiResponse;
 import com.weather.weather_prediction.dto.WeatherInfoDto;
 import com.weather.weather_prediction.dto.Wind;
 import com.weather.weather_prediction.model.WeatherResponse;
 import com.weather.weather_prediction.util.WeatherUtils;
+import io.swagger.v3.core.util.Json;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class WeatherService {
+    private static final Duration MAX_AGE = Duration.ofHours(3);
+    private static final Duration REDIS_TTL = Duration.ofHours(24);
 
-    @Autowired
+    @Value("${weather.api.url}")
+    private String apiUrl;
+
+    @Value("${weather.api.key}")
+    private String apiKey;
+
+    private final RedisTemplate<String, CachedWeather> redisTemplate;
+    private final ObjectMapper objectMapper;
     private OpenWeatherClient openWeatherClient;
 
-    public List<WeatherResponse> getWeatherForecast(String city) throws JsonProcessingException {
-        JsonNode forecastJson = openWeatherClient.getForecast(city);
-        WeatherApiResponse weatherApiResponse = WeatherUtils.parseForecast(forecastJson);
-        return formWeatherForecast(weatherApiResponse);
+    public WeatherService(RedisTemplate<String, CachedWeather> redisTemplate,
+                             ObjectMapper objectMapper,
+                          OpenWeatherClient openWeatherClient) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.openWeatherClient = openWeatherClient;
     }
 
-    private List<WeatherResponse> formWeatherForecast(WeatherApiResponse weatherApiResponse) {
+    public List<WeatherResponse> getWeatherForecast(String city) throws JsonProcessingException {
+        String cacheKey = "forecast::" + city.toLowerCase();
+
+        CachedWeather cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            Duration age = Duration.between(cached.getFetchedAt(), LocalDateTime.now());
+            if (age.compareTo(MAX_AGE) <= 0) {
+                log.info("✅ Cache hit for: {}", city);
+                return cached.getData();
+            } else {
+                log.info("♻ Cache expired for: {}", city);
+            }
+        }
+
+        // Call API and parse
+        JsonNode weatherApiNode = openWeatherClient.fetchAndTransform(city);
+        WeatherApiResponse weatherApiResponse = objectMapper.treeToValue(weatherApiNode, WeatherApiResponse.class);
+
+        List<WeatherResponse> freshForecast = formWeatherForecast(weatherApiResponse);
+        // Store in cache
+        CachedWeather wrapper = new CachedWeather(LocalDateTime.now(), freshForecast);
+        redisTemplate.opsForValue().set(cacheKey, wrapper, REDIS_TTL);
+        return freshForecast;
+    }
+
+    public List<WeatherResponse> formWeatherForecast(WeatherApiResponse weatherApiResponse) {
 
         Map<LocalDate, List<WeatherInfoDto>> groupedByDate = new HashMap<>();
 
